@@ -28,7 +28,7 @@ public Plugin myinfo =
 	name = "[L4D2] Officer Spy Game Mod Changes",
 	author = "Officer Spy",
 	description = "Game-specific changes for general use.",
-	version = "1.0.0",
+	version = "1.0.1",
 	url = ""
 };
 
@@ -46,14 +46,18 @@ public void OnPluginStart()
 	if (hGamedata == null)
 		SetFailState("Could not find gamedata file: l4d2.osgmc!");
 	
-	int offset = hGamedata.GetOffset("CBasePlayer::IsBot");
+	int gamedataFails = 0;
 	
-	if (offset == -1)
-		SetFailState("Failed to retrieve offset for CBasePlayer::IsBot!");
+	if (!DH_RegisterHook(hGamedata, g_DHookIsBot, "CBasePlayer::IsBot"))
+	{
+		LogError("Failed to setup hook for CBasePlayer::IsBot!"); 
+		gamedataFails++;
+	}
 	
 	delete hGamedata;
 	
-	g_DHookIsBot = new DynamicHook(offset, HookType_Entity, ReturnType_Bool, ThisPointer_CBaseEntity);
+	if (gamedataFails > 0)
+		SetFailState("GameData file has %d problems!", gamedataFails);
 }
 
 public void OnMapStart()
@@ -327,4 +331,11 @@ void TriggerCarAlarm(int car, int client)
 	g_bIsHittingCar[client] = true;
 	AcceptEntityInput(car, "SurvivorStandingOnCar", client, client);
 	g_bIsHittingCar[client] = false;
+}
+
+stock bool DH_RegisterHook(GameData gd, DynamicHook &hook, const char[] fnName)
+{
+	hook = DynamicHook.FromConf(gd, fnName);
+	
+	return hook != null;
 }

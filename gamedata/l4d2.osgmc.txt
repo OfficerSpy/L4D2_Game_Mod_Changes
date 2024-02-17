@@ -10,5 +10,15 @@
 				"linux"		"478"
 			}
 		}
+		"Functions"
+		{
+			"CBasePlayer::IsBot"
+			{
+				"offset"	"CBasePlayer::IsBot"
+				"hooktype"	"entity"
+				"return"	"bool"
+				"this"		"entity"
+			}
+		}
 	}
 }
