@@ -4,6 +4,8 @@
 
 #pragma semicolon 1
 
+#define DEBUG_DETOURS
+
 #define MODEL_PROP_GASCAN	"models/props_junk/gascan001a.mdl"
 #define MODEL_PROP_OXYGEN	"models/props_equipment/oxygentank01.mdl"
 #define MODEL_PROP_PROPANE	"models/props_junk/propanecanister001a.mdl"
@@ -16,30 +18,32 @@ bool g_bIsHitDuringRevive[MAXPLAYERS + 1];
 
 DynamicHook g_DHookIsBot;
 
-ConVar os_gmc_bots_survivor_damage_props;
+ConVar os_gmc_bot_survivor_damage_props;
 ConVar os_gmc_bots_spitter_damage_gascans;
-ConVar os_gmc_bots_survivor_trigger_car_alarm;
-ConVar os_gmc_bots_survivor_startle_witch;
-ConVar os_gmc_bots_survivor_damage_spit;
-ConVar os_gmc_bots_survivor_reset_revive;
+ConVar os_gmc_bot_survivor_trigger_car_alarm;
+ConVar os_gmc_bot_survivor_startle_witch;
+ConVar os_gmc_bot_survivor_damage_spit;
+ConVar os_gmc_bot_survivor_reset_revive;
+ConVar os_gmc_human_survivor_damage_spit;
 
 public Plugin myinfo = 
 {
 	name = "[L4D2] Officer Spy Game Mod Changes",
 	author = "Officer Spy",
 	description = "Game-specific changes for general use.",
-	version = "1.0.1",
+	version = "1.0.2",
 	url = ""
 };
 
 public void OnPluginStart()
 {
-	os_gmc_bots_survivor_damage_props = CreateConVar("sm_os_gmc_bots_survivor_damage_props", "1", "Let survivor bots damage props.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+	os_gmc_bot_survivor_damage_props = CreateConVar("sm_os_gmc_bot_survivor_damage_props", "1", "Let survivor bots damage props.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 	os_gmc_bots_spitter_damage_gascans = CreateConVar("sm_os_gmc_bots_spitter_damage_gascans", "1", "Let spitter bots damage gas cans.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
-	os_gmc_bots_survivor_trigger_car_alarm = CreateConVar("sm_os_gmc_bots_survivor_trigger_car_alarm", "1", "Let survivor bots trigger car alarms.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
-	os_gmc_bots_survivor_startle_witch = CreateConVar("sm_os_gmc_bots_survivor_startle_witch", "1", "Let survivor bots startle the wandering witch.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
-	os_gmc_bots_survivor_damage_spit = CreateConVar("sm_os_gmc_bots_survivor_damage_spit", "1.0", "Multiplier for how much damage bots take from spitter acid.", FCVAR_NOTIFY);
-	os_gmc_bots_survivor_reset_revive = CreateConVar("sm_os_gmc_bots_survivor_reset_revive", "1", "Force bots to stop reviving players when hit by an infected.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+	os_gmc_bot_survivor_trigger_car_alarm = CreateConVar("sm_os_gmc_bot_survivor_trigger_car_alarm", "1", "Let survivor bots trigger car alarms.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+	os_gmc_bot_survivor_startle_witch = CreateConVar("sm_os_gmc_bot_survivor_startle_witch", "1", "Let survivor bots startle the wandering witch.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+	os_gmc_bot_survivor_damage_spit = CreateConVar("sm_os_gmc_bot_survivor_damage_spit", "1.0", "Multiplier for how much damage bots take from spitter acid.", FCVAR_NOTIFY);
+	os_gmc_bot_survivor_reset_revive = CreateConVar("sm_os_gmc_bot_survivor_reset_revive", "1", "Force bots to stop reviving players when hit by an infected.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+	os_gmc_human_survivor_damage_spit = CreateConVar("sm_os_gmc_human_survivor_damage_spit", "1.0", "Multiplier for how much damage human survivors take from spitter acid.", FCVAR_NOTIFY);
 	
 	GameData hGamedata = new GameData("l4d2.osgmc");
 	
@@ -62,7 +66,7 @@ public void OnPluginStart()
 
 public void OnMapStart()
 {
-	char propModels[][] = {MODEL_PROP_OXYGEN, MODEL_PROP_PROPANE, MODEL_PROP_FIREWORKS};
+	char propModels[][] = { MODEL_PROP_OXYGEN, MODEL_PROP_PROPANE, MODEL_PROP_FIREWORKS };
 	
 	for (int i = 0; i < sizeof(g_iPropModelIndexes); i++)
 		g_iPropModelIndexes[i] = PrecacheModel(propModels[i]);
@@ -107,18 +111,19 @@ public void OnEntityCreated(int entity, const char[] classname)
 
 public Action Player_OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom)
 {
-	if (os_gmc_bots_survivor_damage_spit.FloatValue != 1.0)
+	if (GetClientTeam(victim) == 2)
 	{
-		//Survivor bots only
-		if (GetClientTeam(victim) == 2 && IsFakeClient(victim))
+		if (inflictor > 0)
 		{
-			if (inflictor > 0)
+			char classname[PLATFORM_MAX_PATH]; GetEntityClassname(inflictor, classname, sizeof(classname));
+			
+			if (StrEqual(classname, "insect_swarm"))
 			{
-				char classname[PLATFORM_MAX_PATH]; GetEntityClassname(inflictor, classname, sizeof(classname));
+				float multDamage = IsFakeClient(victim) ? os_gmc_bot_survivor_damage_spit.FloatValue : os_gmc_human_survivor_damage_spit.FloatValue;
 				
-				if (StrEqual(classname, "insect_swarm"))
+				if (multDamage != 1.0)
 				{
-					damage *= os_gmc_bots_survivor_damage_spit.FloatValue;
+					damage *= multDamage;
 					return Plugin_Changed;
 				}
 			}
@@ -130,7 +135,7 @@ public Action Player_OnTakeDamage(int victim, int &attacker, int &inflictor, flo
 
 public Action Player_OnTakeDamageAlive(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom)
 {
-	if (os_gmc_bots_survivor_reset_revive.BoolValue)
+	if (os_gmc_bot_survivor_reset_revive.BoolValue)
 	{
 		if (IsIncapacitatedSurvivor(victim) && IsValidInfected(attacker))
 		{
@@ -153,10 +158,10 @@ public Action Player_OnTakeDamageAlive(int victim, int &attacker, int &inflictor
 
 public Action GasCan_OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom)
 {
-	if (os_gmc_bots_survivor_damage_props.BoolValue && IsValidSurvivorBot(attacker))
+	if (os_gmc_bot_survivor_damage_props.BoolValue && IsValidSurvivorBot(attacker))
 	{
-		//Have the bot only be the inflictor, rather than the attacker
-		SDKHooks_TakeDamage(victim, attacker, -1, damage, damagetype, weapon, NULL_VECTOR, damagePosition, true);
+		//Have the bot only be the inflictor, and the world the attacker
+		SDKHooks_TakeDamage(victim, attacker, 0, damage, damagetype, weapon, NULL_VECTOR, damagePosition, true);
 		return Plugin_Handled;
 	}
 	
@@ -167,7 +172,7 @@ public Action GasCan_OnTakeDamage(int victim, int &attacker, int &inflictor, flo
 		{
 			//NOTE: Setting the spitter as the inflictor causes the spit damage sound effect when the gas can's fire inflicts
 			//damage to survivors. however, it is still just fire (inferno) damage and stops when the acid is gone
-			SDKHooks_TakeDamage(victim, attacker, -1, damage, damagetype, weapon, NULL_VECTOR, damagePosition, true);
+			SDKHooks_TakeDamage(victim, attacker, 0, damage, damagetype, weapon, NULL_VECTOR, damagePosition, true);
 			return Plugin_Handled;
 		}
 	}
@@ -177,9 +182,10 @@ public Action GasCan_OnTakeDamage(int victim, int &attacker, int &inflictor, flo
 
 public Action PropPhysics_OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom)
 {
-	if (os_gmc_bots_survivor_damage_props.BoolValue && IsValidSurvivorBot(attacker) && IsExplosivePropWeapon(victim))
+	if (os_gmc_bot_survivor_damage_props.BoolValue && IsValidSurvivorBot(attacker) && IsExplosivePropWeapon(victim))
 	{
-		SDKHooks_TakeDamage(victim, attacker, -1, damage, damagetype, weapon, NULL_VECTOR, damagePosition, true);
+		//For prop_physics, have the bot's weapon be the actual attacker, as it will show as them doing the damage
+		SDKHooks_TakeDamage(victim, attacker, GetActiveWeapon(attacker), damage, damagetype, weapon, NULL_VECTOR, damagePosition, true);
 		return Plugin_Handled;
 	}
 	
@@ -188,7 +194,7 @@ public Action PropPhysics_OnTakeDamage(int victim, int &attacker, int &inflictor
 
 public Action CarProp_OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom)
 {
-	if (os_gmc_bots_survivor_trigger_car_alarm.BoolValue)
+	if (os_gmc_bot_survivor_trigger_car_alarm.BoolValue)
 	{
 		// if (GetEntProp(victim, Prop_Send, "m_bDisabled") == 1)
 			// return Plugin_Continue;
@@ -202,7 +208,7 @@ public Action CarProp_OnTakeDamage(int victim, int &attacker, int &inflictor, fl
 
 public void CarProp_OnTakeDamagePost(int victim, int attacker, int inflictor, float damage, int damagetype, int weapon, const float damageForce[3], const float damagePosition[3], int damagecustom)
 {
-	if (os_gmc_bots_survivor_trigger_car_alarm.BoolValue)
+	if (os_gmc_bot_survivor_trigger_car_alarm.BoolValue)
 	{
 		// if (GetEntProp(victim, Prop_Send, "m_bDisabled") == 1)
 			// return;
@@ -214,7 +220,7 @@ public void CarProp_OnTakeDamagePost(int victim, int attacker, int inflictor, fl
 
 public void CarProp_TouchPost(int entity, int other)
 {
-	if (os_gmc_bots_survivor_trigger_car_alarm.BoolValue)
+	if (os_gmc_bot_survivor_trigger_car_alarm.BoolValue)
 	{
 		// if (GetEntProp(entity, Prop_Send, "m_bDisabled") == 1)
 			// return;
@@ -227,7 +233,7 @@ public void CarProp_TouchPost(int entity, int other)
 
 public Action Witch_OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom)
 {
-	if (os_gmc_bots_survivor_startle_witch.BoolValue)
+	if (os_gmc_bot_survivor_startle_witch.BoolValue)
 	{
 		if (GetEntPropFloat(victim, Prop_Send, "m_rage") >= 1.0)
 			return Plugin_Continue;
@@ -241,7 +247,7 @@ public Action Witch_OnTakeDamage(int victim, int &attacker, int &inflictor, floa
 
 public void Witch_OnTakeDamagePost(int victim, int attacker, int inflictor, float damage, int damagetype, int weapon, const float damageForce[3], const float damagePosition[3], int damagecustom)
 {
-	if (os_gmc_bots_survivor_startle_witch.BoolValue)
+	if (os_gmc_bot_survivor_startle_witch.BoolValue)
 	{
 		if (IsValidSurvivorBot(attacker))
 			g_bIsAttackingWitch[attacker] = false;
@@ -258,6 +264,11 @@ public MRESReturn DHookCallback_IsBot_Post(int pThis, DHookReturn hReturn)
 	if (g_bIsHittingCar[pThis] || g_bIsAttackingWitch[pThis] || g_bIsHitDuringRevive[pThis])
 	{
 		hReturn.Value = false;
+		
+#if defined DEBUG_DETOURS
+		PrintToChatAll("[DHookCallback_IsBot_Post] return false");
+#endif
+		
 		return MRES_Supercede;
 	}
 	
@@ -331,6 +342,11 @@ void TriggerCarAlarm(int car, int client)
 	g_bIsHittingCar[client] = true;
 	AcceptEntityInput(car, "SurvivorStandingOnCar", client, client);
 	g_bIsHittingCar[client] = false;
+}
+
+stock int GetActiveWeapon(int client)
+{
+	return GetEntPropEnt(client, Prop_Data, "m_hActiveWeapon");
 }
 
 stock bool DH_RegisterHook(GameData gd, DynamicHook &hook, const char[] fnName)
