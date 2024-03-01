@@ -4,7 +4,7 @@
 
 #pragma semicolon 1
 
-#define DEBUG_DETOURS
+// #define DEBUG_DETOURS
 
 #define MODEL_PROP_GASCAN	"models/props_junk/gascan001a.mdl"
 #define MODEL_PROP_OXYGEN	"models/props_equipment/oxygentank01.mdl"
